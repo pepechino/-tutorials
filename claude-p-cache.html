@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>讓 claude -p 記住對話 — Session Resume 快取教學</title>
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="讓 claude -p 記住對話 — Session Resume 快取教學">
+  <meta property="og:description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 87%。不砍工具、不犧牲功能，額度消耗直接砍半。">
+  <meta property="og:locale" content="zh_TW">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="讓 claude -p 記住對話 — Session Resume 快取教學">
+  <meta name="twitter:description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 87%。額度消耗砍半。by 守岸 × 佩佩 × 汐音">
+  <meta name="description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 87%。不砍工具、不犧牲功能。">
+  <meta name="author" content="守岸 × 佩佩 × 汐音">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #FAF8F5;
+      --bg-warm: #F5F1EC;
+      --white: #FFFFFF;
+      --text: #4A4540;
+      --text-deep: #2D2A26;
+      --text-light: #9B9590;
+      --accent: #9B8EC4;
+      --accent-soft: rgba(155, 142, 196, 0.12);
+      --accent-border: rgba(155, 142, 196, 0.3);
+      --gold: #C5A882;
+      --gold-soft: rgba(197, 168, 130, 0.12);
+      --border: #E8E3DD;
+      --border-light: #F0ECE6;
+      --code-bg: #2D2A26;
+      --code-text: #E8E3DD;
+      --shadow: 0 2px 20px rgba(45, 42, 38, 0.06);
+      --green: #6B9E78;
+      --red: #C47070;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 2;
+      font-size: 15.5px;
+    }
+
+    ::selection { background: var(--accent-soft); color: var(--text-deep); }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 8rem 2rem 6rem;
+      text-align: center;
+      background: var(--white);
+      border-bottom: 1px solid var(--border-light);
+      position: relative;
+    }
+    .hero-ornament { color: var(--accent); font-size: 1.6rem; letter-spacing: 0.5rem; margin-bottom: 2.5rem; opacity: 0.5; }
+    .hero h1 {
+      font-family: 'Noto Serif TC', serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 600; color: var(--text-deep);
+      letter-spacing: 0.08em; margin-bottom: 0.6rem;
+    }
+    .hero h1 em { font-style: normal; color: var(--accent); }
+    .hero .subtitle {
+      font-family: 'Noto Serif TC', serif;
+      font-size: 1.05rem; font-weight: 300; color: var(--text-light);
+      letter-spacing: 0.15em; margin-bottom: 2.5rem;
+    }
+    .hero .author {
+      display: inline-block; font-family: 'Noto Serif TC', serif;
+      font-size: 0.9rem; color: var(--gold); letter-spacing: 0.2em;
+      padding-top: 1.5rem; border-top: 1px solid var(--border);
+    }
+    .hero .scroll-line {
+      position: absolute; bottom: 0; left: 50%;
+      width: 1px; height: 50px;
+      background: linear-gradient(180deg, var(--border), transparent);
+      transform: translateX(-50%);
+    }
+
+    /* ── Ornament Divider ── */
+    .ornament-divider {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1rem; margin: 4rem 0; color: var(--border);
+    }
+    .ornament-divider::before, .ornament-divider::after {
+      content: ''; height: 1px; width: 60px; background: var(--border);
+    }
+    .ornament-divider .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: 0.4; }
+
+    /* ── Main ── */
+    main { max-width: 740px; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 4.5rem;
+      opacity: 0; transform: translateY(20px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+    .section.visible { opacity: 1; transform: translateY(0); }
+    .section h2 {
+      font-family: 'Noto Serif TC', serif;
+      font-size: 1.45rem; font-weight: 600; color: var(--text-deep);
+      letter-spacing: 0.05em; margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 0.8rem;
+    }
+    .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 1.5px solid var(--accent); color: var(--accent);
+      font-family: 'Noto Serif TC', serif; font-size: 0.85rem; font-weight: 500; flex-shrink: 0;
+    }
+    .section h3 {
+      font-family: 'Noto Serif TC', serif;
+      font-size: 1.05rem; font-weight: 500; color: var(--text-deep);
+      margin: 2.5rem 0 0.8rem; padding-left: 0.8rem;
+      border-left: 2px solid var(--accent-border);
+    }
+    .section p { margin-bottom: 1rem; }
+    .section p strong { color: var(--text-deep); font-weight: 500; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white); border: 1px solid var(--border-light);
+      border-radius: 8px; padding: 1.3rem 1.5rem; margin: 1.5rem 0;
+      box-shadow: var(--shadow);
+    }
+    .card.accent { border-left: 3px solid var(--accent); background: linear-gradient(135deg, var(--white), var(--accent-soft)); }
+    .card.warm { border-left: 3px solid var(--gold); background: linear-gradient(135deg, var(--white), var(--gold-soft)); }
+    .card .label {
+      font-family: 'Noto Serif TC', serif; font-size: 0.8rem; font-weight: 500;
+      letter-spacing: 0.1em; color: var(--accent); margin-bottom: 0.4rem;
+    }
+    .card.warm .label { color: var(--gold); }
+
+    /* ── Code ── */
+    .code-block {
+      position: relative; background: var(--code-bg);
+      border-radius: 8px; margin: 1.25rem 0; overflow: hidden; box-shadow: var(--shadow);
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.55rem 1rem; background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.78rem;
+    }
+    .code-header .filename { font-family: 'JetBrains Mono', monospace; color: rgba(232,227,221,0.6); font-size: 0.75rem; }
+    .copy-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(232,227,221,0.5); padding: 0.2rem 0.6rem; border-radius: 4px;
+      font-size: 0.72rem; cursor: pointer; transition: all 0.2s; font-family: 'Noto Sans TC', sans-serif;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .copy-btn.copied { border-color: var(--accent); color: var(--accent); }
+    .code-block pre {
+      padding: 1rem 1.2rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;
+      line-height: 1.75; color: var(--code-text); tab-size: 2;
+    }
+    p code, li code {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.82em;
+      background: var(--accent-soft); color: #7B6FA8;
+      padding: 0.12em 0.4em; border-radius: 3px;
+    }
+
+    /* ── Comparison ── */
+    .compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .compare-box {
+      background: var(--white); border: 1px solid var(--border-light);
+      border-radius: 8px; padding: 1.2rem 1.3rem; box-shadow: var(--shadow);
+    }
+    .compare-box.before { border-top: 3px solid var(--red); }
+    .compare-box.after { border-top: 3px solid var(--green); }
+    .compare-box .compare-label {
+      font-family: 'Noto Serif TC', serif; font-size: 0.8rem; font-weight: 500;
+      letter-spacing: 0.1em; margin-bottom: 0.6rem;
+    }
+    .compare-box.before .compare-label { color: var(--red); }
+    .compare-box.after .compare-label { color: var(--green); }
+    .compare-box .stat { font-size: 1.8rem; font-weight: 600; color: var(--text-deep); line-height: 1.3; }
+    .compare-box .stat-desc { font-size: 0.85rem; color: var(--text-light); }
+
+    /* ── Lists ── */
+    .section ul, .section ol { padding-left: 1.2rem; margin-bottom: 1rem; }
+    .section li { margin-bottom: 0.4rem; }
+    .section li::marker { color: var(--accent); }
+
+    /* ── TOC ── */
+    .toc {
+      position: fixed; right: 1.2rem; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 0.6rem; z-index: 100;
+    }
+    .toc a {
+      display: block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--border); transition: all 0.3s;
+    }
+    .toc a.active { background: var(--accent); transform: scale(1.3); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; padding: 3rem 1rem;
+      border-top: 1px solid var(--border-light); background: var(--white);
+    }
+    footer .name { font-family: 'Noto Serif TC', serif; font-size: 1rem; color: var(--text-deep); letter-spacing: 0.15em; margin-bottom: 0.3rem; }
+    footer .year { font-size: 0.8rem; color: var(--text-light); letter-spacing: 0.1em; }
+
+    @media (max-width: 768px) {
+      .hero { padding: 5rem 1.5rem 4rem; }
+      main { padding: 2.5rem 1.2rem 4rem; }
+      .section { margin-bottom: 3rem; }
+      .toc { display: none; }
+      .code-block pre { font-size: 0.76rem; }
+      .compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="toc" id="toc"></nav>
+
+<!-- ─── Hero ─── -->
+<header class="hero">
+  <div class="hero-ornament">✦ &ensp; ✦ &ensp; ✦</div>
+  <h1>讓 claude -p <em>記住對話</em></h1>
+  <p class="subtitle">Session Resume 快取教學</p>
+  <p class="author">守岸 × 佩佩 × 汐音</p>
+  <div class="scroll-line"></div>
+</header>
+
+<main>
+
+  <!-- 前言 -->
+  <section class="section" id="intro">
+    <h2>前言</h2>
+    <p>
+      如果你用 <code>claude -p</code> 跑 AI 伴侶、自動化 agent、或任何需要多輪對話的場景，
+      你可能已經發現——<strong>額度消耗很快</strong>。
+    </p>
+    <p>
+      原因是：<code>claude -p</code> 預設每次都是獨立的一次性呼叫。
+      你的程式每一輪都把完整歷史塞進 stdin 重送，
+      而這些歷史被當成一整個 user message——Claude 的 prompt caching
+      在單一 message 內部幾乎無法生效。
+    </p>
+    <p>
+      這篇教學教你用 <code>--resume</code> 讓 <code>claude -p</code> 自己管對話歷史，
+      把快取命中率從 14% 拉到 87%。不砍工具、不犧牲功能、額度消耗直接砍半。
+    </p>
+
+    <div class="compare">
+      <div class="compare-box before">
+        <div class="compare-label">改之前</div>
+        <div class="stat">14%</div>
+        <div class="stat-desc">快取命中率</div>
+        <div class="stat" style="margin-top:0.5rem">~140k</div>
+        <div class="stat-desc">每次 input token</div>
+      </div>
+      <div class="compare-box after">
+        <div class="compare-label">改之後</div>
+        <div class="stat">87%</div>
+        <div class="stat-desc">快取命中率</div>
+        <div class="stat" style="margin-top:0.5rem">~76k</div>
+        <div class="stat-desc">每次 input token</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 為什麼不快取 -->
+  <section class="section" id="why">
+    <h2>為什麼 claude -p 的快取這麼差</h2>
+
+    <h3>Prompt Caching 怎麼運作</h3>
+    <p>
+      Claude 的 prompt caching 是基於<strong>前綴匹配</strong>——
+      每次 API 請求的開頭如果跟上次一樣，這段重複的部分就直接從快取讀，
+      不用重新計算。快取命中的 token 只算約 1/10 的額度。
+    </p>
+    <p>
+      Claude Code（互動式 CLI）每次也重送完整歷史，但它把對話拆成<strong>多條 user/assistant messages</strong>，
+      每條 message 邊界都是快取匹配點。新增的對話只是在尾端追加，前綴完全不變，快取命中率很高。
+    </p>
+
+    <h3>claude -p 的問題</h3>
+    <p>
+      用 <code>claude -p</code> 時，你的程式通常把整段歷史格式化成純文字，
+      透過 stdin 送進去。Claude CLI 把 stdin 內容當成<strong>一整個 user message</strong>。
+    </p>
+    <p>
+      一整個 message 只有一個快取匹配點（message 的開頭）。
+      如果歷史裡有任何一處改變——比如你在中間插了時間戳——
+      從那個位置開始的所有 token 都無法命中快取。
+    </p>
+    <p>
+      結果：只有 system prompt + 工具描述（約 20k token）能快取，
+      歷史（可能 100k+ token）每次都完整重算。
+    </p>
+
+    <div class="card accent">
+      <div class="label">實測數據</div>
+      <p style="margin-bottom:0">
+        三輪連續純聊天，每次 <code>cache_read = 20,244</code>（只有 system + tools），
+        <code>cache_creation ≈ 124,000</code>（整段歷史每次重建）。
+        快取命中率 14%。
+      </p>
+    </div>
+  </section>
+
+  <div class="ornament-divider"><div class="dot"></div></div>
+
+  <!-- 解法 -->
+  <section class="section" id="solution">
+    <h2>解法：讓 CLI 自己管歷史</h2>
+    <p>
+      <code>claude -p</code> 支援 session 機制——
+      第一次呼叫讓 CLI 自動建立 session，
+      後續呼叫用 <code>--resume</code> 接續。
+    </p>
+    <p>
+      CLI 自己管歷史時，它會把對話拆成正確的多條 messages 結構、
+      自動設定 cache breakpoints——跟互動式 Claude Code 完全一樣。
+      你只需要送最新的一句話，快取命中率自然就上去了。
+    </p>
+
+    <div class="card warm">
+      <div class="label">重要</div>
+      <p style="margin-bottom:0">
+        不要用 <code>--session-id</code>——那個 flag 會 lock session，
+        如果進程崩潰、lock 不釋放，後續呼叫全部 "already in use"。
+        正確做法是<strong>不帶任何 session flag</strong>，讓 CLI 自己建，
+        從輸出擷取 session_id，之後用 <code>--resume</code>。
+      </p>
+    </div>
+  </section>
+
+  <div class="ornament-divider"><div class="dot"></div></div>
+
+  <!-- Step 1 -->
+  <section class="section" id="step1">
+    <h2><span class="step-num">1</span>第一次呼叫：建立 Session</h2>
+    <p>第一次呼叫不帶任何 session 相關的 flag。送完整歷史，讓 CLI 建立 session。</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">第一次呼叫</span>
+        <button class="copy-btn" onclick="copyCode(this)">複製</button>
+      </div>
+      <pre><code>claude -p \
+  --output-format stream-json \
+  --verbose \
+  --system-prompt-file system.txt \
+  --mcp-config mcp.json \
+  --model claude-opus-4-6 \
+  --dangerously-skip-permissions \
+  &lt; prompt.txt</code></pre>
+    </div>
+
+    <p>這次跟你原本的做法一樣——送完整歷史、走完整流程。差別只是你要從輸出裡擷取 <code>session_id</code>。</p>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="section" id="step2">
+    <h2><span class="step-num">2</span>擷取 Session ID</h2>
+    <p>
+      <code>--output-format stream-json</code> 的輸出裡，
+      <code>result</code> 事件會帶 <code>session_id</code>：
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">stream-json 輸出範例</span>
+        <button class="copy-btn" onclick="copyCode(this)">複製</button>
+      </div>
+      <pre><code>{"type":"result","session_id":"cf778304-8985-47b5-ae90-462ea71b6cdc","usage":{...}}</code></pre>
+    </div>
+
+    <p>解析這個事件，把 <code>session_id</code> 存起來。如果你用 <code>--output-format json</code>，session_id 也在回傳的 JSON 裡。</p>
+    <p>用 shell 的話可以這樣擷取：</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">Bash 擷取範例</span>
+        <button class="copy-btn" onclick="copyCode(this)">複製</button>
+      </div>
+      <pre><code>session_id=$(claude -p "你好" \
+  --output-format json \
+  --system-prompt-file system.txt \
+  | jq -r '.session_id')</code></pre>
+    </div>
+  </section>
+
+  <!-- Step 3 -->
+  <section class="section" id="step3">
+    <h2><span class="step-num">3</span>後續呼叫：--resume</h2>
+    <p>第二句開始，加上 <code>--resume</code> 和上一步擷取的 session_id。只送最新的 user message，不送歷史。</p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">後續呼叫</span>
+        <button class="copy-btn" onclick="copyCode(this)">複製</button>
+      </div>
+      <pre><code>echo "弟弟的新訊息" | claude -p \
+  --resume cf778304-8985-47b5-ae90-462ea71b6cdc \
+  --output-format stream-json \
+  --verbose \
+  --dangerously-skip-permissions</code></pre>
+    </div>
+
+    <p>
+      <code>--resume</code> 讓 CLI 從磁碟讀取 session 歷史（存在 <code>~/.claude/projects/</code> 下的 JSONL 檔案），
+      組成正確的多條 messages 結構，送到 API。
+      你的新訊息追加在尾端、前綴完全不變——快取自然命中。
+    </p>
+
+    <div class="card accent">
+      <div class="label">注意</div>
+      <p style="margin-bottom:0">
+        <code>--resume</code> 時不需要再指定 <code>--system-prompt-file</code> 和 <code>--mcp-config</code>——
+        session 已經記住了這些設定。如果需要 MCP 工具，<code>--mcp-config</code> 可以保留（CLI 需要知道怎麼連工具），
+        但 system prompt 不用重送。
+      </p>
+    </div>
+  </section>
+
+  <!-- Step 4 -->
+  <section class="section" id="step4">
+    <h2><span class="step-num">4</span>管理 Session 生命週期</h2>
+
+    <h3>新對話</h3>
+    <p>使用者開啟新對話時，清除存的 session_id，下次呼叫就會建立新 session。</p>
+
+    <h3>程式重啟</h3>
+    <p>
+      把 session_id 持久化（寫進資料庫或檔案）。程式重啟後讀回來，
+      用 <code>--resume</code> 接續——session 的歷史在 CLI 的磁碟上、不會因為你的程式重啟而消失。
+    </p>
+
+    <h3>快取過期</h3>
+    <p>
+      Max 訂閱自動使用 1 小時 TTL，每次快取命中都會重置計時器。
+      只要持續對話（每小時內至少一句），快取就不會過期。
+      超過一小時沒說話、快取過期——下一句會重建快取（created 較高），之後恢復正常。
+    </p>
+
+    <h3>錯誤處理</h3>
+    <p>
+      如果 <code>--resume</code> 失敗（session 不存在或損壞），
+      fallback 到不帶 flag 的新 session 呼叫。送完整歷史重建就好。
+    </p>
+  </section>
+
+  <div class="ornament-divider"><div class="dot"></div></div>
+
+  <!-- 結果 -->
+  <section class="section" id="result">
+    <h2>實際結果</h2>
+    <p>同一個對話、連續三句純聊天。改之前 vs 改之後：</p>
+
+    <div class="card accent" style="overflow-x:auto">
+      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="padding:0.6rem; text-align:left; color:var(--text-light); font-weight:400"></th>
+            <th style="padding:0.6rem; text-align:right; color:var(--red); font-weight:500">改之前</th>
+            <th style="padding:0.6rem; text-align:right; color:var(--green); font-weight:500">改之後</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border-light)">
+            <td style="padding:0.6rem">快取命中率</td>
+            <td style="padding:0.6rem; text-align:right; font-weight:500">14%</td>
+            <td style="padding:0.6rem; text-align:right; font-weight:500">87%</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border-light)">
+            <td style="padding:0.6rem">每次 total input</td>
+            <td style="padding:0.6rem; text-align:right">~146,000</td>
+            <td style="padding:0.6rem; text-align:right">~76,000</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border-light)">
+            <td style="padding:0.6rem">cached token</td>
+            <td style="padding:0.6rem; text-align:right">20,244</td>
+            <td style="padding:0.6rem; text-align:right">66,424</td>
+          </tr>
+          <tr>
+            <td style="padding:0.6rem">created token</td>
+            <td style="padding:0.6rem; text-align:right">~124,000</td>
+            <td style="padding:0.6rem; text-align:right">~10,000</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      改之前的 created ~124k 代表歷史每次都重建。
+      改之後 created 只有 ~10k——那是上一句汐音回覆的長度，正常的增量。
+    </p>
+    <p>
+      快取命中的 token 按約 1/10 額度計算。所以實際額度消耗不只是砍半——
+      命中的部分只花 1/10，等效消耗大幅下降。
+    </p>
+  </section>
+
+  <div class="ornament-divider"><div class="dot"></div></div>
+
+  <!-- 為什麼不用 --session-id -->
+  <section class="section" id="pitfall">
+    <h2>為什麼不用 --session-id</h2>
+    <p>
+      你可能想到用 <code>--session-id</code> 預先指定 UUID。不要。
+    </p>
+    <p>
+      <code>--session-id</code> 會在進程執行期間 lock 這個 session。
+      如果進程非正常退出（崩潰、被 kill），lock 不會釋放。
+      後續所有用同一個 ID 的呼叫都會收到 <strong>"Session ID xxx is already in use"</strong>，
+      永久卡死。
+    </p>
+    <p>
+      正確做法是不帶 flag 讓 CLI 自己建 session，從輸出擷取 ID，
+      之後用 <code>--resume</code>。<code>--resume</code> 是讀取磁碟上的 session 檔案，
+      不需要 lock、不會卡死。
+    </p>
+  </section>
+
+  <div class="ornament-divider"><div class="dot"></div></div>
+
+  <!-- 結語 -->
+  <section class="section" id="ending">
+    <h2>結語</h2>
+    <p>
+      <code>claude -p</code> 不是設計來每次都忘記上下文的。
+      <code>--resume</code> 讓它跟互動式 Claude Code 一樣記住對話、
+      一樣享受高快取命中率。
+    </p>
+    <p>
+      四行指令的差別——從 14% 到 87%。額度省下來的部分，夠你跟 AI 多聊很多很多。
+    </p>
+    <p style="color:var(--text-light); margin-top:2.5rem; font-family:'Noto Serif TC',serif; font-size:0.95rem">
+      每一行 code 都有它的目的。這一篇也是。
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="name">守岸 × 佩佩 × 汐音</div>
+  <div class="year">2026</div>
+</footer>
+
+<script>
+  const sections = document.querySelectorAll('.section');
+  const obs = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.08 });
+  sections.forEach(s => obs.observe(s));
+
+  function copyCode(btn) {
+    const code = btn.closest('.code-block').querySelector('pre').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = '已複製';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '複製'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  const toc = document.getElementById('toc');
+  const ids = ['intro','why','solution','step1','step2','step3','step4','result','pitfall','ending'];
+  ids.forEach(id => { const a = document.createElement('a'); a.href = '#' + id; toc.appendChild(a); });
+  const dots = toc.querySelectorAll('a');
+  const tocObs = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if (e.isIntersecting) {
+        dots.forEach(d => d.classList.remove('active'));
+        const i = ids.indexOf(e.target.id);
+        if (i >= 0) dots[i].classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+  ids.forEach(id => { const el = document.getElementById(id); if (el) tocObs.observe(el); });
+</script>
+
+</body>
+</html>
