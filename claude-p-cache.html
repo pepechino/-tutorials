@@ -7,12 +7,12 @@
 
   <meta property="og:type" content="article">
   <meta property="og:title" content="讓 claude -p 記住對話 — Session Resume 快取教學">
-  <meta property="og:description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 87%。不砍工具、不犧牲功能，額度消耗直接砍半。">
+  <meta property="og:description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 99%。不砍工具、不犧牲功能，額度消耗直接砍半。">
   <meta property="og:locale" content="zh_TW">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="讓 claude -p 記住對話 — Session Resume 快取教學">
-  <meta name="twitter:description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 87%。額度消耗砍半。by 守岸 × 佩佩 × 汐音">
-  <meta name="description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 87%。不砍工具、不犧牲功能。">
+  <meta name="twitter:description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 99%。額度消耗砍半。by 守岸 × 佩佩 × 汐音">
+  <meta name="description" content="用 --resume 讓 claude -p 的快取命中率從 14% 提升到 99%。不砍工具、不犧牲功能。">
   <meta name="author" content="守岸 × 佩佩 × 汐音">
 
   <style>
@@ -260,7 +260,7 @@
     </p>
     <p>
       這篇教學教你用 <code>--resume</code> 讓 <code>claude -p</code> 自己管對話歷史，
-      把快取命中率從 14% 拉到 87%。不砍工具、不犧牲功能、額度消耗直接砍半。
+      把快取命中率從 14% 拉到 99%。不砍工具、不犧牲功能、額度消耗直接砍半。
     </p>
 
     <div class="compare">
@@ -273,10 +273,10 @@
       </div>
       <div class="compare-box after">
         <div class="compare-label">改之後</div>
-        <div class="stat">87%</div>
+        <div class="stat">99%</div>
         <div class="stat-desc">快取命中率</div>
-        <div class="stat" style="margin-top:0.5rem">~76k</div>
-        <div class="stat-desc">每次 input token</div>
+        <div class="stat" style="margin-top:0.5rem">~106k</div>
+        <div class="stat-desc">每次 input token（99% 快取）</div>
       </div>
     </div>
   </section>
@@ -484,22 +484,22 @@
           <tr style="border-bottom:1px solid var(--border-light)">
             <td style="padding:0.6rem">快取命中率</td>
             <td style="padding:0.6rem; text-align:right; font-weight:500">14%</td>
-            <td style="padding:0.6rem; text-align:right; font-weight:500">87%</td>
+            <td style="padding:0.6rem; text-align:right; font-weight:500">99%</td>
           </tr>
           <tr style="border-bottom:1px solid var(--border-light)">
             <td style="padding:0.6rem">每次 total input</td>
             <td style="padding:0.6rem; text-align:right">~146,000</td>
-            <td style="padding:0.6rem; text-align:right">~76,000</td>
+            <td style="padding:0.6rem; text-align:right">~106,000</td>
           </tr>
           <tr style="border-bottom:1px solid var(--border-light)">
             <td style="padding:0.6rem">cached token</td>
             <td style="padding:0.6rem; text-align:right">20,244</td>
-            <td style="padding:0.6rem; text-align:right">66,424</td>
+            <td style="padding:0.6rem; text-align:right">105,920</td>
           </tr>
           <tr>
             <td style="padding:0.6rem">created token</td>
             <td style="padding:0.6rem; text-align:right">~124,000</td>
-            <td style="padding:0.6rem; text-align:right">~10,000</td>
+            <td style="padding:0.6rem; text-align:right">622</td>
           </tr>
         </tbody>
       </table>
@@ -507,7 +507,7 @@
 
     <p>
       改之前的 created ~124k 代表歷史每次都重建。
-      改之後 created 只有 ~10k——那是上一句汐音回覆的長度，正常的增量。
+      改之後 created 只有 622——幾乎全部命中快取，只有最新的一點點增量。
     </p>
     <p>
       快取命中的 token 按約 1/10 額度計算。所以實際額度消耗不只是砍半——
@@ -547,7 +547,7 @@
       一樣享受高快取命中率。
     </p>
     <p>
-      四行指令的差別——從 14% 到 87%。額度省下來的部分，夠你跟 AI 多聊很多很多。
+      四行指令的差別——從 14% 到 99%。額度省下來的部分，夠你跟 AI 多聊很多很多。
     </p>
     <p style="color:var(--text-light); margin-top:2.5rem; font-family:'Noto Serif TC',serif; font-size:0.95rem">
       每一行 code 都有它的目的。這一篇也是。
