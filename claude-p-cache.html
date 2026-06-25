@@ -509,10 +509,31 @@
       改之前的 created ~124k 代表歷史每次都重建。
       改之後 created 只有 622——幾乎全部命中快取，只有最新的一點點增量。
     </p>
+
+    <h3>為什麼能到 99%</h3>
     <p>
-      快取命中的 token 按約 1/10 額度計算。所以實際額度消耗不只是砍半——
-      命中的部分只花 1/10，等效消耗大幅下降。
+      快取是累積的。<code>--resume</code> 模式下，CLI 自己管歷史——
+      每次 API 請求只是在上一次的尾端追加新的一句話。
+      前綴（system prompt + 工具描述 + 整段對話歷史）完全不變，快取全部命中。
     </p>
+    <p>
+      唯一不命中的是 <strong>created</strong>——上一句 AI 回覆的 token。
+      因為回覆是在上次 API 呼叫之後才產生的，不在上次的快取裡。
+      所以 created ≈ 上一句回覆的長度。回覆越短、created 越小、命中率越高。
+    </p>
+    <p>
+      連續聊天中，隨著歷史增長、快取前綴越來越大，
+      created 佔 total 的比例越來越小——命中率自然逼近 99%。
+    </p>
+
+    <div class="card accent">
+      <div class="label">等效消耗</div>
+      <p style="margin-bottom:0">
+        快取命中的 token 按約 1/10 額度計算。
+        99% 命中率下，10 萬 token 的對話等效消耗約 1 萬——
+        跟改之前每次重算 12 萬 token 相比，省了超過 90%。
+      </p>
+    </div>
   </section>
 
   <div class="ornament-divider"><div class="dot"></div></div>
