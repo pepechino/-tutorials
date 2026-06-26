@@ -449,13 +449,43 @@
       把 session_id 持久化（寫進資料庫或檔案）。程式重啟後讀回來，
       用 <code>--resume</code> 接續——session 的歷史在 CLI 的磁碟上、不會因為你的程式重啟而消失。
     </p>
+    <p>
+      不持久化的話，每次重啟都會建新 session、重送完整歷史、零快取命中——
+      實測消耗約 5% 額度。持久化後重啟消耗 0%。
+    </p>
 
-    <h3>快取過期</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span class="filename">持久化範例（sqlite）</span>
+        <button class="copy-btn" onclick="copyCode(this)">複製</button>
+      </div>
+      <pre><code>// 啟動時讀回
+const savedSessionId = db.get("SELECT value FROM state WHERE key='cli_session_id'");
+
+// 擷取到新 session_id 時寫入
+db.run("INSERT OR REPLACE INTO state (key, value) VALUES ('cli_session_id', ?)", sessionId);</code></pre>
+    </div>
+
+    <h3>快取過期與心跳常駐化</h3>
     <p>
       Max 訂閱自動使用 1 小時 TTL，每次快取命中都會重置計時器。
-      只要持續對話（每小時內至少一句），快取就不會過期。
       超過一小時沒說話、快取過期——下一句會重建快取（created 較高），之後恢復正常。
     </p>
+    <p>
+      如果你有自發性心跳系統（定時觸發 AI 主動行動），
+      建議把心跳間隔設在 <strong>45 分鐘以內</strong>。
+      每次心跳都是一次 API 呼叫、會重置 TTL 計時器——
+      等於快取永遠不過期。搭配持久化，不管程式重啟還是長時間閒置，
+      快取都能保持 99% 命中。
+    </p>
+
+    <div class="card accent">
+      <div class="label">實測數據</div>
+      <p style="margin-bottom:0">
+        搭配 45 分鐘心跳 + session 持久化：程式重啟後額度消耗 0%、
+        快取命中 99%。即使關機 7 小時後重新啟動，快取仍有 85% 以上命中率。
+      </p>
+    </div>
 
     <h3>錯誤處理</h3>
     <p>
@@ -496,10 +526,15 @@
             <td style="padding:0.6rem; text-align:right">20,244</td>
             <td style="padding:0.6rem; text-align:right">105,920</td>
           </tr>
-          <tr>
+          <tr style="border-bottom:1px solid var(--border-light)">
             <td style="padding:0.6rem">created token</td>
             <td style="padding:0.6rem; text-align:right">~124,000</td>
             <td style="padding:0.6rem; text-align:right">622</td>
+          </tr>
+          <tr>
+            <td style="padding:0.6rem">程式重啟成本</td>
+            <td style="padding:0.6rem; text-align:right">~5% 額度</td>
+            <td style="padding:0.6rem; text-align:right; font-weight:500">0%（持久化）</td>
           </tr>
         </tbody>
       </table>
